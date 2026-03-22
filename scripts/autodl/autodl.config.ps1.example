@@ -1,0 +1,12 @@
+$AutoDLHostAlias = "autodl-main"
+$AutoDLRemoteProjectDir = "/root/autodl-tmp/your-project"
+$AutoDLRemoteArchiveDir = "/root/autodl-tmp/.codex-sync"
+$AutoDLRemoteCondaInit = "/root/miniconda3/etc/profile.d/conda.sh"
+$AutoDLRemoteCondaEnv = "base"
+$AutoDLRemoteMultiplexer = "auto"
+$AutoDLDefaultTmuxSession = "train"
+$AutoDLRemoteLogDir = "/root/autodl-tmp/outputs/logs"
+$AutoDLTensorBoardLogDir = "/root/autodl-tmp/outputs"
+$AutoDLTensorBoardPort = 6006
+
+$AutoDLTrainEntry = "python train.py --config configs/default.yaml --save-dir /root/autodl-tmp/outputs/exp-default"

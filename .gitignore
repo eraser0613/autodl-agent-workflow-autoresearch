@@ -1,0 +1,6 @@
+scripts/autodl/autodl.config.ps1
+result/
+*.log
+*.tmp
+__pycache__/
+.vscode/
