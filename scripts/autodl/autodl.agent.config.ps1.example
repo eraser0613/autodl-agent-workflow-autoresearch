@@ -1,0 +1,35 @@
+# Copy this file to scripts/autodl/autodl.agent.config.ps1 and edit it locally.
+# Do not commit the real config. It may contain private host aliases and paths.
+
+$AutoDLAgentHostAlias = "autodl-main"
+
+# All remote agent operations should stay under this workspace root.
+$AutoDLAgentRemoteRoot = "/root/autodl-tmp/agent-workspace"
+$AutoDLAgentRemoteReposDir = "/root/autodl-tmp/agent-workspace/repos"
+$AutoDLAgentRemoteRunsDir = "/root/autodl-tmp/agent-workspace/runs"
+$AutoDLAgentRemoteArtifactsDir = "/root/autodl-tmp/agent-workspace/artifacts"
+
+# Local run records are written here. This directory is ignored by git.
+$AutoDLAgentLocalRunsDir = "result/agent-runs"
+
+# Default runtime used when -CondaEnv is omitted.
+$AutoDLAgentCondaInit = "/root/miniconda3/etc/profile.d/conda.sh"
+$AutoDLAgentDefaultCondaEnv = "base"
+$AutoDLAgentRemoteMultiplexer = "auto"
+
+# Optional shell prelude sourced before commands. AutoDL often uses this for GitHub/HuggingFace access.
+$AutoDLAgentRemotePrelude = "if [ -f /etc/network_turbo ]; then source /etc/network_turbo; fi"
+
+# Safety defaults for exploratory remote work.
+$AutoDLAgentAllowOutsideWorkspace = $false
+$AutoDLAgentRequireConfirmForDestructive = $true
+
+# Names used for masking logs. Prefer remote preconfigured credentials over passing tokens in commands.
+$AutoDLAgentSecretEnvNames = @(
+    "GITHUB_TOKEN",
+    "HF_TOKEN",
+    "HUGGINGFACE_TOKEN",
+    "WANDB_API_KEY",
+    "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY"
+)

@@ -1,0 +1,29 @@
+# Copy to profiles/targets/<target-id>.agent.local.ps1 and edit locally.
+# Do not commit the real .local.ps1 file.
+
+$AutoDLAgentHostAlias = "autodl-main"
+
+$AutoDLAgentRemoteRoot = "/root/autodl-tmp/agent-workspace"
+$AutoDLAgentRemoteReposDir = "/root/autodl-tmp/agent-workspace/repos"
+$AutoDLAgentRemoteRunsDir = "/root/autodl-tmp/agent-workspace/runs"
+$AutoDLAgentRemoteArtifactsDir = "/root/autodl-tmp/agent-workspace/artifacts"
+
+# Put each target's local run records under a separate directory once you start using multiple targets heavily.
+$AutoDLAgentLocalRunsDir = "result/agent-runs"
+
+$AutoDLAgentCondaInit = "/root/miniconda3/etc/profile.d/conda.sh"
+$AutoDLAgentDefaultCondaEnv = "base"
+$AutoDLAgentRemoteMultiplexer = "auto"
+$AutoDLAgentRemotePrelude = "if [ -f /etc/network_turbo ]; then source /etc/network_turbo; fi"
+
+$AutoDLAgentAllowOutsideWorkspace = $false
+$AutoDLAgentRequireConfirmForDestructive = $true
+
+$AutoDLAgentSecretEnvNames = @(
+    "GITHUB_TOKEN",
+    "HF_TOKEN",
+    "HUGGINGFACE_TOKEN",
+    "WANDB_API_KEY",
+    "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY"
+)

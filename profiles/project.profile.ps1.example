@@ -1,0 +1,36 @@
+# Copy to profiles/<project>.local.ps1 after an exploratory agent run succeeds.
+# Project profiles are per-repository knowledge, not generic 3DGS logic.
+
+$ProjectProfileName = "example-project"
+$ProjectRepoUrl = "https://github.com/example/example-project.git"
+$ProjectRepoRef = "main"
+$ProjectRemoteName = "example-project"
+
+$ProjectDefaultCondaEnv = "example_env"
+$ProjectPythonVersion = "3.10"
+
+$ProjectSetupCommands = @(
+    "git submodule update --init --recursive",
+    "python -m pip install --upgrade pip setuptools wheel",
+    "if [ -f requirements.txt ]; then python -m pip install -r requirements.txt; fi"
+)
+
+$ProjectSmokeTestCommands = @(
+    "python -V",
+    "python - <<'PY'\nimport torch\nprint(torch.__version__)\nprint(torch.cuda.is_available())\nPY"
+)
+
+$ProjectTrainCommands = @{
+    "smoke" = "python train.py --help"
+}
+
+$ProjectResultIncludes = @(
+    "outputs",
+    "checkpoints",
+    "runs"
+)
+
+$ProjectNotes = @"
+Record the minimum known-good server image, CUDA/PyTorch versions, data assumptions,
+checkpoints, exact commands, and success evidence after exploration.
+"@

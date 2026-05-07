@@ -391,6 +391,66 @@ Prerequisites:
 
 - Controls which files should not be synced
 
+**3DGS AutoDL Workflow**
+
+This repository also includes a 3D Gaussian Splatting profile for using local Claude Code as the controller while AutoDL acts as the remote GPU execution sandbox.
+
+Start with:
+
+```powershell
+Copy-Item .\scripts\autodl\autodl.3dgs.config.ps1.example .\scripts\autodl\autodl.3dgs.config.ps1
+# edit $AutoDL3DGSLocalProjectDir in scripts\autodl\autodl.3dgs.config.ps1 when syncing a target repo such as Uni3R
+powershell -ExecutionPolicy Bypass -File .\scripts\autodl\discover_3dgs_project.ps1 -ProjectDir "E:/path/to/target-3dgs-repo"
+powershell -ExecutionPolicy Bypass -File .\scripts\autodl\test_3dgs_remote_connection.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\autodl\sync_3dgs_to_autodl.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\autodl\bootstrap_3dgs_remote.ps1 -NoSync
+powershell -ExecutionPolicy Bypass -File .\scripts\autodl\run_3dgs_train.ps1 -NoSync
+powershell -ExecutionPolicy Bypass -File .\scripts\autodl\show_3dgs_status.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\autodl\watch_3dgs_training.ps1
+```
+
+See `docs\3DGS_AUTODL_CLAUDE_CODE_WORKFLOW.md` for the full workflow, including SSH setup, dataset placement, train/render/eval commands, TensorBoard, result pullback, and Claude Code guardrails.
+
+**Local Web Control Deck**
+
+This repository includes a local-only read dashboard for Claude Code-driven AutoDL work.
+It visualizes run records and can trigger the existing read-only status probe, but it does not replace Claude Code as the command executor.
+
+Start it from the repository root:
+
+```powershell
+cd .\web
+npm start
+```
+
+Then open:
+
+```text
+http://127.0.0.1:3766
+```
+
+The deck reads:
+
+- `web/config/targets.local.json` when present, otherwise it falls back to `scripts/autodl/autodl.agent.config.ps1`
+- `result/agent-runs/<run-id>/run.json`
+- `result/agent-runs/<run-id>/commands.jsonl`
+- `result/agent-runs/<run-id>/stdout/*.txt`
+
+To register multiple SSH targets, copy the example registry and add one entry per target:
+
+```powershell
+Copy-Item .\web\config\targets.example.json .\web\config\targets.local.json
+Copy-Item .\profiles\targets\target.agent.local.ps1.example .\profiles\targets\autodl-a.agent.local.ps1
+```
+
+Each target points to a private harness config path. The status button calls the same PowerShell harness with that target's config:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\autodl\agent.ps1 -ConfigPath .\profiles\targets\autodl-a.agent.local.ps1 -Action status -Lines 120
+```
+
+Keep sensitive SSH keys, passwords, tokens, real AutoDL configs, and `web/config/targets.local.json` outside git. Use the generated prompts or copied commands inside Claude Code for actual decision-making and follow-up actions.
+
 **Recommended Daily Workflow**
 
 The most common loop should look like this:
@@ -463,6 +523,7 @@ git push -u origin main
 Do not publish the following:
 
 - Your real `autodl.config.ps1`
+- Your real `autodl.3dgs.config.ps1`
 - Any real server password
 - Any private key
 - Real datasets

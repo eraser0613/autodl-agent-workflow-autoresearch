@@ -1,0 +1,62 @@
+# Copy this file to scripts/autodl/autodl.3dgs.config.ps1 and edit it locally.
+# Do not commit the real config. It may contain private host aliases and paths.
+
+$AutoDLHostAlias = "autodl-main"
+
+# Local source repository to sync. Defaults to this workflow repo if omitted.
+# For a target project such as Uni3R, point this at the target repo root.
+$AutoDL3DGSLocalProjectDir = "E:/xiangmu/vision-repro-agent/3dgs_paper/downloads_short/007_uni3r_unified_3d_reconstruct_2508.03643/r"
+
+# Remote workspace layout. Keep 3DGS work under one sandbox-like root.
+$AutoDL3DGSRemoteWorkspaceDir = "/root/autodl-tmp/3dgs-sandbox"
+$AutoDL3DGSRemoteProjectDir = "/root/autodl-tmp/3dgs-sandbox/project"
+$AutoDL3DGSRemoteArchiveDir = "/root/autodl-tmp/3dgs-sandbox/.autodl-sync"
+$AutoDL3DGSRemoteDataRoot = "/root/autodl-tmp/3dgs-sandbox/data"
+$AutoDL3DGSRemoteOutputRoot = "/root/autodl-tmp/3dgs-sandbox/outputs"
+$AutoDL3DGSRemoteLogDir = "/root/autodl-tmp/3dgs-sandbox/logs"
+
+# Scene paths. By default, scene/model paths derive from data/output root + scene name.
+$AutoDL3DGSSceneName = "garden"
+$AutoDL3DGSRemoteSceneDir = "/root/autodl-tmp/3dgs-sandbox/data/garden"
+$AutoDL3DGSRemoteModelDir = "/root/autodl-tmp/3dgs-sandbox/outputs/garden"
+
+# Remote Python runtime.
+$AutoDL3DGSRemoteCondaInit = "/root/miniconda3/etc/profile.d/conda.sh"
+$AutoDL3DGSRemoteCondaEnv = "gaussian_splatting"
+$AutoDL3DGSPythonVersion = "3.8"
+$AutoDL3DGSRemoteMultiplexer = "auto"
+
+# Persistent sessions.
+$AutoDL3DGSTrainSessionName = "3dgs-train"
+$AutoDL3DGSRenderSessionName = "3dgs-render"
+$AutoDL3DGSEvalSessionName = "3dgs-eval"
+$AutoDL3DGSSetupSessionName = "3dgs-setup"
+
+# TensorBoard.
+$AutoDL3DGSTensorBoardLogDir = "/root/autodl-tmp/3dgs-sandbox/outputs"
+$AutoDL3DGSTensorBoardPort = 6006
+
+# Setup commands run inside AutoDL3DGSRemoteProjectDir after conda activation.
+# Adjust for the specific 3DGS fork you are reproducing.
+$AutoDL3DGSSetupCommands = @(
+    "git submodule update --init --recursive",
+    "python -m pip install --upgrade pip setuptools wheel",
+    "if [ -f requirements.txt ]; then python -m pip install -r requirements.txt; fi",
+    "if [ -d submodules/diff-gaussian-rasterization ]; then python -m pip install submodules/diff-gaussian-rasterization; fi",
+    "if [ -d submodules/simple-knn ]; then python -m pip install submodules/simple-knn; fi"
+)
+
+# Original 3DGS-style defaults. Fork-specific command changes belong in your private config.
+$AutoDL3DGSTrainCommand = "python train.py -s /root/autodl-tmp/3dgs-sandbox/data/garden -m /root/autodl-tmp/3dgs-sandbox/outputs/garden --iterations 30000"
+$AutoDL3DGSRenderCommand = "python render.py -m /root/autodl-tmp/3dgs-sandbox/outputs/garden"
+$AutoDL3DGSEvalCommand = "python metrics.py -m /root/autodl-tmp/3dgs-sandbox/outputs/garden"
+
+# Local result directory and remote includes for pull_3dgs_results.ps1.
+$AutoDL3DGSLocalResultDir = "result/3dgs"
+$AutoDL3DGSResultIncludes = @(
+    "logs",
+    "outputs/garden/cfg_args",
+    "outputs/garden/results.json",
+    "outputs/garden/train/ours_30000",
+    "outputs/garden/test/ours_30000"
+)

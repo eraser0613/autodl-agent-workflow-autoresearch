@@ -1,0 +1,20 @@
+{
+  "targets": [
+    {
+      "id": "autodl-main",
+      "name": "AutoDL Main",
+      "configPath": "scripts/autodl/autodl.agent.config.ps1",
+      "capacity": 1,
+      "tags": ["default", "autodl"],
+      "notes": "Copy this file to web/config/targets.local.json and add one entry per SSH target. Keep the real file private."
+    },
+    {
+      "id": "autodl-backup",
+      "name": "AutoDL Backup",
+      "configPath": "profiles/targets/autodl-backup.agent.local.ps1",
+      "capacity": 1,
+      "tags": ["example"],
+      "notes": "Example target-specific harness config path."
+    }
+  ]
+}
