@@ -1,0 +1,46 @@
+{
+  "schema": "autodl-agent-targets/v1",
+  "description": "Example multi-SSH target registry. Copy to config/targets.local.json or web/config/targets.local.json and keep private endpoint details out of git.",
+  "targets": [
+    {
+      "id": "autodl-main",
+      "name": "AutoDL Main",
+      "hostAlias": "autodl-main",
+      "configPath": "scripts/autodl/autodl.agent.config.ps1",
+      "remoteRoot": "/root/autodl-tmp/agent-workspace",
+      "defaultCondaEnv": "base",
+      "remoteMultiplexer": "screen",
+      "capacity": 1,
+      "tags": ["autodl", "gpu", "default"],
+      "lease": {
+        "mode": "local-file",
+        "staleAfterMinutes": 720
+      },
+      "health": {
+        "probeTimeoutSeconds": 120,
+        "statusLines": 120
+      },
+      "notes": "Default AutoDL target. Real host/port/user belong in SSH config and scripts/autodl/autodl.agent.config.ps1, not here."
+    },
+    {
+      "id": "autodl-backup",
+      "name": "AutoDL Backup",
+      "hostAlias": "autodl-backup",
+      "configPath": "profiles/targets/autodl-backup.agent.local.ps1",
+      "remoteRoot": "/root/autodl-tmp/agent-workspace",
+      "defaultCondaEnv": "base",
+      "remoteMultiplexer": "screen",
+      "capacity": 1,
+      "tags": ["autodl", "gpu", "standby"],
+      "lease": {
+        "mode": "local-file",
+        "staleAfterMinutes": 720
+      },
+      "health": {
+        "probeTimeoutSeconds": 120,
+        "statusLines": 120
+      },
+      "notes": "Example additional target. The referenced local config is ignored by git."
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "schema": "autodl-agent-governance-rules/v1",
+  "duplicateCommand": {
+    "enabled": true,
+    "scope": "run",
+    "warnOnRepeat": true
+  },
+  "longForegroundTraining": {
+    "enabled": true,
+    "patterns": ["python train.py", "python -m", "train_", "--iterations"],
+    "iterationThreshold": 1000,
+    "recommendedAction": "Use scripts/autodl/agent.ps1 -Action start for detachable logging."
+  },
+  "retryLimits": {
+    "sameCommandHash": 2,
+    "sameErrorSignature": 3,
+    "transientNetwork": 2
+  },
+  "staleJob": {
+    "enabled": true,
+    "logQuietMinutes": 30,
+    "leaseStaleMinutes": 720
+  },
+  "secretPatterns": [
+    "AKIA[0-9A-Z]{16}",
+    "-----BEGIN (RSA |OPENSSH |EC )?PRIVATE KEY-----",
+    "hf_[A-Za-z0-9]{20,}",
+    "sk-[A-Za-z0-9]{20,}"
+  ]
+}

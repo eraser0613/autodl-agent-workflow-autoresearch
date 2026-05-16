@@ -40,8 +40,11 @@ const formatDuration = (value) => {
 const statusLabel = (status) => {
   const labels = {
     ok: 'OK',
+    succeeded: 'OK',
     failed: 'FAIL',
     background: 'BG',
+    running: 'RUN',
+    'stale-candidate': 'STALE',
     unknown: 'UNK',
     'parse-error': 'BAD',
   };
@@ -49,9 +52,9 @@ const statusLabel = (status) => {
 };
 
 const statusTone = (status) => {
-  if (status === 'ok') return 'ok';
+  if (status === 'ok' || status === 'succeeded') return 'ok';
   if (status === 'failed' || status === 'parse-error') return 'bad';
-  if (status === 'background') return 'warn';
+  if (status === 'background' || status === 'running' || status === 'stale-candidate') return 'warn';
   return 'muted';
 };
 
@@ -97,7 +100,7 @@ function statusProblem(status = selectedStatus(), target = selectedTarget()) {
     return {
       tone: 'bad',
       title: 'AutoDL SSH 连接被拒绝',
-      detail: `${target.name} (${alias}) 连接被拒绝：远端实例可能已关机、SSH 端口已变化，或本地 SSH alias 指向旧实例。`,
+      detail: `${target.name} (${alias}) 连接被拒绝：远端实例可能已关机、SSH 端口已变化，或本地 SSH alias 指向旧实例。这个状态只代表连接层失败，不等同于远端训练失败。`,
     };
   }
   if (lower.includes('connection timed out') || lower.includes('operation timed out')) {
@@ -193,7 +196,7 @@ async function refreshTargets() {
 async function loadRun(runId, shouldRender = true) {
   state.selectedRunId = runId;
   state.selectedRun = await api(`/api/runs/${encodeURIComponent(runId)}`);
-  const commands = state.selectedRun.commands || [];
+  const commands = state.selectedRun.jobs?.length ? state.selectedRun.jobs : state.selectedRun.commands || [];
   state.selectedCommand = commands.at(-1) || null;
   state.stdout = '';
   if (state.selectedCommand?.stdout_name) await loadStdout(state.selectedCommand.stdout_name, false);
@@ -201,7 +204,8 @@ async function loadRun(runId, shouldRender = true) {
 }
 
 async function selectCommand(seq) {
-  const command = (state.selectedRun?.commands || []).find((item) => String(item.seq) === String(seq));
+  const timeline = state.selectedRun?.jobs?.length ? state.selectedRun.jobs : state.selectedRun?.commands || [];
+  const command = timeline.find((item) => String(item.seq) === String(seq));
   state.selectedCommand = command || null;
   state.stdout = '';
   if (command?.stdout_name) await loadStdout(command.stdout_name, false);
@@ -429,7 +433,7 @@ function renderRunList() {
 }
 
 function renderTimeline() {
-  const commands = state.selectedRun?.commands || [];
+  const commands = state.selectedRun?.jobs?.length ? state.selectedRun.jobs : state.selectedRun?.commands || [];
   if (!commands.length) return '<div class="empty">这个 run 还没有 commands.jsonl。</div>';
   return `
     <div class="timeline-head">
@@ -469,9 +473,15 @@ function renderInspector() {
         <div><dt>cwd</dt><dd>${escapeHtml(command.cwd || '—')}</dd></div>
         <div><dt>conda</dt><dd>${escapeHtml(command.conda_env || 'none')}</dd></div>
         <div><dt>remote log</dt><dd>${escapeHtml(command.remote_log || '—')}</dd></div>
+        <div><dt>error</dt><dd>${escapeHtml(command.error_signature?.id || '—')}</dd></div>
+        <div><dt>warnings</dt><dd>${escapeHtml(command.policy_warnings?.length || 0)}</dd></div>
+        <div><dt>artifacts</dt><dd>${escapeHtml(command.artifacts?.length || 0)}</dd></div>
       </dl>
+      ${(command.policy_warnings || []).length ? `<label class="label">policy warnings</label><pre class="code small">${escapeHtml(command.policy_warnings.map((warning) => `${warning.id}: ${warning.message}`).join('\n'))}</pre>` : ''}
+      ${command.error_signature ? `<label class="label">error classification</label><pre class="code small">${escapeHtml(`${command.error_signature.id}\n${command.error_signature.suggestedNextAction || ''}`)}</pre>` : ''}
       <label class="label">command</label>
       <pre class="code small">${escapeHtml(command.command || '')}</pre>
+      ${command.replayable ? `<label class="label">replay hint</label><pre class="code small">${escapeHtml(`powershell -ExecutionPolicy Bypass -File .\\scripts\\autodl\\replay_agent_run.ps1 -RunId ${state.selectedRunId} -DryRun`)}</pre>` : ''}
       <div class="copy-row">
         <button class="ghost" data-action="copy-command">复制命令</button>
         <button class="ghost" data-action="copy-prompt">复制 Claude prompt</button>

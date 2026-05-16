@@ -1,0 +1,86 @@
+{
+  "schema": "autodl-agent-error-signatures/v1",
+  "signatures": [
+    {
+      "id": "ssh-connection-refused",
+      "category": "connection",
+      "severity": "blocking",
+      "patterns": ["connection refused", "ssh: connect to host"],
+      "likelyCause": "The AutoDL instance is stopped, the SSH port changed, or the SSH alias points at an old endpoint.",
+      "suggestedNextAction": "Update the SSH alias/config for the target and verify with a status probe before treating remote jobs as failed.",
+      "skillType": "troubleshooting"
+    },
+    {
+      "id": "ssh-auth-failed",
+      "category": "connection",
+      "severity": "blocking",
+      "patterns": ["permission denied", "publickey", "authentication failed"],
+      "likelyCause": "SSH key, username, IdentityFile, or authorized_keys is not accepted by the remote host.",
+      "suggestedNextAction": "Verify SSH config and key installation; do not retry training commands until authentication succeeds.",
+      "skillType": "troubleshooting"
+    },
+    {
+      "id": "ssh-timeout",
+      "category": "connection",
+      "severity": "blocking",
+      "patterns": ["connection timed out", "operation timed out", "connection timeout"],
+      "likelyCause": "Remote network path or instance is unavailable.",
+      "suggestedNextAction": "Check AutoDL instance status and retry only bounded status probes.",
+      "skillType": "troubleshooting"
+    },
+    {
+      "id": "cuda-oom",
+      "category": "workload",
+      "severity": "retry-with-changes",
+      "patterns": ["cuda out of memory", "torch.cuda.outofmemoryerror", "cublas_status_alloc_failed"],
+      "likelyCause": "The current batch/window/resolution/model configuration exceeds available GPU memory.",
+      "suggestedNextAction": "Reduce resolution, batch size, window length, or enable chunking before retrying.",
+      "skillType": "troubleshooting"
+    },
+    {
+      "id": "cudnn-symbol-mismatch",
+      "category": "environment",
+      "severity": "retry-with-env-change",
+      "patterns": ["undefined symbol", "libcudnn", "cudnngetlibconfig"],
+      "likelyCause": "Runtime is loading incompatible NVIDIA/CUDNN libraries before the conda environment libraries.",
+      "suggestedNextAction": "Inspect LD_LIBRARY_PATH and put environment NVIDIA libraries before system libraries.",
+      "skillType": "deployment"
+    },
+    {
+      "id": "checkpoint-corrupted",
+      "category": "artifact",
+      "severity": "retry-download",
+      "patterns": ["pytorchstreamreader failed", "failed finding central directory", "invalid load key", "unexpected eof"],
+      "likelyCause": "Checkpoint download is partial or corrupt.",
+      "suggestedNextAction": "Re-download to a temp path, verify size/load, then atomically replace the checkpoint.",
+      "skillType": "deployment"
+    },
+    {
+      "id": "dataset-format-error",
+      "category": "dataset",
+      "severity": "needs-adaptation",
+      "patterns": ["filenotfounderror", "keyerror", "assertionerror", "opencv_cameras", "transforms.json", "images.txt"],
+      "likelyCause": "The repository expects a different dataset layout or metadata schema.",
+      "suggestedNextAction": "Inspect the loader and build the smallest dataset-format adapter before retrying.",
+      "skillType": "intake"
+    },
+    {
+      "id": "lpips-image-too-small",
+      "category": "workload",
+      "severity": "retry-with-changes",
+      "patterns": ["output size is too small", "lpips", "vgg"],
+      "likelyCause": "Evaluation image was downscaled below the LPIPS/VGG pooling minimum.",
+      "suggestedNextAction": "Increase resolution or disable LPIPS for tiny smoke scenes.",
+      "skillType": "project-profile"
+    },
+    {
+      "id": "duplicate-command",
+      "category": "governance",
+      "severity": "warn",
+      "patterns": [],
+      "likelyCause": "The same command hash has already been recorded in this run.",
+      "suggestedNextAction": "Review the earlier job before repeating expensive execution.",
+      "skillType": "governance"
+    }
+  ]
+}

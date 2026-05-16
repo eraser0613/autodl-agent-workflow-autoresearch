@@ -10,6 +10,9 @@ export const harnessScript = path.join(repoRoot, 'scripts', 'autodl', 'agent.ps1
 export const agentConfig = path.join(repoRoot, 'scripts', 'autodl', 'autodl.agent.config.ps1');
 export const targetsLocalPath = path.join(repoRoot, 'web', 'config', 'targets.local.json');
 export const targetsExamplePath = path.join(repoRoot, 'web', 'config', 'targets.example.json');
+export const rootTargetsLocalPath = path.join(repoRoot, 'config', 'targets.local.json');
+export const rootTargetsExamplePath = path.join(repoRoot, 'config', 'targets.example.json');
+export const targetStatusRoot = path.join(repoRoot, 'result', 'targets');
 
 const safeNamePattern = /^[A-Za-z0-9_.-]+$/;
 const stdoutNamePattern = /^[A-Za-z0-9_.-]+\.txt$/;
@@ -41,15 +44,21 @@ async function pathExists(filePath) {
 
 async function readJson(filePath, fallback = null) {
   try {
-    return JSON.parse(await fs.readFile(filePath, 'utf8'));
+    return JSON.parse(await readText(filePath));
   } catch {
     return fallback;
   }
 }
 
+async function readText(filePath) {
+  const buffer = await fs.readFile(filePath);
+  const hasManyNulls = buffer.subarray(0, Math.min(buffer.length, 200)).includes(0);
+  return buffer.toString(hasManyNulls ? 'utf16le' : 'utf8').replace(/^\uFEFF/, '');
+}
+
 async function readJsonl(filePath) {
   try {
-    const text = await fs.readFile(filePath, 'utf8');
+    const text = await readText(filePath);
     return text
       .split(/\r?\n/)
       .filter((line) => line.trim().length > 0)
@@ -141,15 +150,20 @@ async function inspectAgentConfig(configPathAbs) {
 }
 
 async function readTargetsRegistry() {
-  const local = await readJson(targetsLocalPath, null);
-  if (local?.targets?.length) {
-    return { source: 'local', registryPath: targetsLocalPath, targets: local.targets };
+  const webLocal = await readJson(targetsLocalPath, null);
+  if (webLocal?.targets?.length) {
+    return { source: 'web-local', registryPath: targetsLocalPath, targets: webLocal.targets };
+  }
+
+  const rootLocal = await readJson(rootTargetsLocalPath, null);
+  if (rootLocal?.targets?.length) {
+    return { source: 'root-local', registryPath: rootTargetsLocalPath, targets: rootLocal.targets };
   }
 
   const inspected = await inspectAgentConfig(agentConfig);
   return {
-    source: 'default',
-    registryPath: targetsLocalPath,
+    source: 'default-agent-config',
+    registryPath: rootTargetsLocalPath,
     targets: [
       {
         id: sanitizeTargetId(inspected.hostAlias || 'autodl-main', 'autodl-main'),
@@ -167,6 +181,71 @@ async function readTargetsRegistry() {
 function publicTarget(target) {
   const { configPathAbs, ...safeTarget } = target;
   return safeTarget;
+}
+
+function classifySshStatus(status) {
+  const output = `${status.stdout || ''}\n${status.stderr || ''}`.toLowerCase();
+  if (status.ok) return 'online';
+  if (status.timed_out || output.includes('connection timed out') || output.includes('operation timed out')) return 'timeout';
+  if (output.includes('connection refused')) return 'connection-refused';
+  if (output.includes('permission denied') || output.includes('authentication failed')) return 'auth-failed';
+  if (output.includes('could not resolve hostname') || output.includes('name or service not known')) return 'offline';
+  if (status.exit_code === 1 && String(status.stderr || '').includes('Missing target config')) return 'config-missing';
+  return 'unknown';
+}
+
+async function readTargetStatus(targetId) {
+  if (!targetId) return null;
+  const status = await readJson(path.join(targetStatusRoot, targetId, 'status.json'), null);
+  if (!status) return null;
+  const lease = status.lease || null;
+  const leaseExpiresAt = lease?.expires_at ? Date.parse(lease.expires_at) : NaN;
+  return {
+    ...status,
+    lease: lease
+      ? {
+          ...lease,
+          stale: Number.isFinite(leaseExpiresAt) ? Date.now() > leaseExpiresAt : Boolean(lease.stale),
+        }
+      : null,
+  };
+}
+
+async function writeTargetStatus(target, probe) {
+  const classified = classifySshStatus(probe);
+  const existing = await readTargetStatus(target.id);
+  const payload = {
+    schema: 'autodl-agent-target-status/v1',
+    target_id: target.id,
+    name: target.name,
+    host_alias: target.hostAlias,
+    config_path: target.configPath,
+    health: classified,
+    ok: probe.ok,
+    exit_code: probe.exit_code,
+    timed_out: probe.timed_out,
+    duration_ms: probe.duration_ms,
+    checked_at: new Date().toISOString(),
+    last_seen_at: probe.ok ? new Date().toISOString() : existing?.last_seen_at || null,
+    command: probe.command,
+    lease: existing?.lease || null,
+    failure_hint: classified === 'online' ? '' : statusFailureHint(classified),
+  };
+  await fs.mkdir(path.join(targetStatusRoot, target.id), { recursive: true });
+  await fs.writeFile(path.join(targetStatusRoot, target.id, 'status.json'), JSON.stringify(payload, null, 2) + '\n', 'utf8');
+  return payload;
+}
+
+function statusFailureHint(classified) {
+  const hints = {
+    'connection-refused': 'AutoDL instance may be stopped or SSH port changed; update the SSH alias/config before retrying workloads.',
+    timeout: 'Network path or instance is unavailable; run bounded status probes only.',
+    'auth-failed': 'SSH key, username, IdentityFile, or authorized_keys may be wrong.',
+    offline: 'Host alias cannot be resolved or target is offline.',
+    'config-missing': 'Target config file is missing locally.',
+    unknown: 'Read the raw status output before changing execution strategy.',
+  };
+  return hints[classified] || hints.unknown;
 }
 
 async function normalizeTarget(raw, index) {
@@ -198,16 +277,23 @@ async function loadTargetsInternal() {
   return {
     source: registry.source,
     registryPath: toRepoRelative(registry.registryPath),
-    examplePath: toRepoRelative(targetsExamplePath),
+    examplePath: toRepoRelative(rootTargetsExamplePath),
+    webExamplePath: toRepoRelative(targetsExamplePath),
     targets,
   };
 }
 
 export async function listTargets() {
   const registry = await loadTargetsInternal();
+  const targets = await Promise.all(
+    registry.targets.map(async (target) => ({
+      ...publicTarget(target),
+      lastStatus: await readTargetStatus(target.id),
+    })),
+  );
   return {
     ...registry,
-    targets: registry.targets.map(publicTarget),
+    targets,
   };
 }
 
@@ -223,7 +309,11 @@ async function getTargetInternal(targetId) {
 }
 
 export async function getTarget(targetId) {
-  return publicTarget(await getTargetInternal(targetId));
+  const target = await getTargetInternal(targetId);
+  return {
+    ...publicTarget(target),
+    lastStatus: await readTargetStatus(target.id),
+  };
 }
 
 export async function getCurrentRunId() {
@@ -272,21 +362,23 @@ export async function listRuns() {
       .filter((entry) => entry.isDirectory() && safeNamePattern.test(entry.name))
       .map(async (entry) => {
         const runDir = path.join(runsRoot, entry.name);
-        const [manifest, commands, stat] = await Promise.all([
+        const [manifest, commands, state, stat] = await Promise.all([
           readJson(path.join(runDir, 'run.json'), {}),
           readJsonl(path.join(runDir, 'commands.jsonl')),
+          readJson(path.join(runDir, 'state.json'), null),
           fs.stat(runDir).catch(() => null),
         ]);
         const normalized = commands.map(normalizeCommand);
-        const latest = normalized.at(-1) ?? null;
-        const failed_count = normalized.filter((command) => command.status === 'failed' || command.status === 'parse-error').length;
-        const background_count = normalized.filter((command) => command.kind === 'background').length;
+        const latest = state?.latest_job || normalized.at(-1) || null;
+        const failed_count = state?.counts?.failed ?? normalized.filter((command) => command.status === 'failed' || command.status === 'parse-error').length;
+        const background_count = state?.counts?.background ?? normalized.filter((command) => command.kind === 'background').length;
 
         return {
           run_id: entry.name,
-          target_id: manifest.target_id || '',
+          status: state?.status || latest?.status || 'unknown',
+          target_id: state?.target_id || manifest.target_id || '',
           worker_id: manifest.worker_id || '',
-          repo_name: manifest.repo_name || '',
+          repo_name: state?.repo_name || manifest.repo_name || '',
           repo_url: manifest.repo_url || '',
           ref: manifest.ref || '',
           host_alias: manifest.host_alias || '',
@@ -295,9 +387,11 @@ export async function listRuns() {
           local_run_dir: manifest.local_run_dir || runDir,
           created_at: manifest.created_at || stat?.birthtime?.toISOString() || null,
           updated_at: stat?.mtime?.toISOString() || null,
-          command_count: normalized.length,
+          command_count: state?.counts?.jobs ?? normalized.length,
           failed_count,
           background_count,
+          policy_warning_count: state?.counts?.policy_warnings ?? 0,
+          artifact_count: state?.counts?.artifacts ?? 0,
           latest,
           is_current: entry.name === currentRun,
         };
@@ -310,9 +404,12 @@ export async function listRuns() {
 export async function getRun(runId) {
   assertSafeName('run id', runId);
   const runDir = path.join(runsRoot, runId);
-  const [manifest, commands, stdoutEntries] = await Promise.all([
+  const [manifest, commands, jobs, events, state, stdoutEntries] = await Promise.all([
     readJson(path.join(runDir, 'run.json'), {}),
     readJsonl(path.join(runDir, 'commands.jsonl')),
+    readJsonl(path.join(runDir, 'jobs.jsonl')),
+    readJsonl(path.join(runDir, 'events.jsonl')),
+    readJson(path.join(runDir, 'state.json'), null),
     fs.readdir(path.join(runDir, 'stdout'), { withFileTypes: true }).catch(() => []),
   ]);
 
@@ -324,7 +421,10 @@ export async function getRun(runId) {
   return {
     run_id: runId,
     manifest,
+    state,
     commands: commands.map(normalizeCommand),
+    jobs,
+    events,
     stdout_files,
   };
 }
@@ -361,7 +461,7 @@ export async function runStatus(lines = 80, targetId = null) {
   ];
 
   if (!target.configExists) {
-    return {
+    const probe = {
       ok: false,
       exit_code: 1,
       timed_out: false,
@@ -371,6 +471,8 @@ export async function runStatus(lines = 80, targetId = null) {
       command: `${shell} ${args.join(' ')}`,
       target: publicTarget(target),
     };
+    const targetState = await writeTargetStatus(target, probe);
+    return { ...probe, health: targetState.health, targetState };
   }
 
   return new Promise((resolve) => {
@@ -396,9 +498,9 @@ export async function runStatus(lines = 80, targetId = null) {
     child.stderr.on('data', (chunk) => {
       stderr += chunk.toString();
     });
-    child.on('error', (error) => {
+    child.on('error', async (error) => {
       clearTimeout(timer);
-      resolve({
+      const probe = {
         ok: false,
         exit_code: 1,
         timed_out: timedOut,
@@ -407,11 +509,13 @@ export async function runStatus(lines = 80, targetId = null) {
         stderr: `${stderr}${error.message}`,
         command: `${shell} ${args.join(' ')}`,
         target: publicTarget(target),
-      });
+      };
+      const targetState = await writeTargetStatus(target, probe);
+      resolve({ ...probe, health: targetState.health, targetState });
     });
-    child.on('close', (code) => {
+    child.on('close', async (code) => {
       clearTimeout(timer);
-      resolve({
+      const probe = {
         ok: code === 0 && !timedOut,
         exit_code: timedOut ? 124 : code,
         timed_out: timedOut,
@@ -420,7 +524,9 @@ export async function runStatus(lines = 80, targetId = null) {
         stderr,
         command: `${shell} ${args.join(' ')}`,
         target: publicTarget(target),
-      });
+      };
+      const targetState = await writeTargetStatus(target, probe);
+      resolve({ ...probe, health: targetState.health, targetState });
     });
   });
 }
